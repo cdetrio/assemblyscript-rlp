@@ -23,7 +23,7 @@ function safeParseInt(v: string, base: u32): u32 {
     if (v.slice(0, 2) == '00') {
         throw new Error('invalid RLP: extra zeros');
     }
-    return parseI32(v, base) as u32;
+    return I32.parseInt(v, base) as u32;
 }
 
 /** Transform an integer into its hexadecimal value */
@@ -46,18 +46,18 @@ function bytesToHex(bytes: Uint8Array): string {
         res[i*2] = hex.charCodeAt(0);
         res[i*2+1] = hex.charCodeAt(1);
     }
-    return String.fromUTF8(res.buffer.data, res.byteLength);
+    return String.UTF8.decodeUnsafe((res.buffer as usize) + res.byteOffset, res.byteLength);
 }
 
 function hexToBytes(hex: string): Uint8Array {
     if (!hex.length) {
-        return null;
+        return new Uint8Array(0);
     }
     assert(hex.length % 2 == 0);
     let byteLength = hex.length / 2;
     let res = new Uint8Array(byteLength);
     for (let i = 0; i < byteLength; i++) {
-        res[i] = parseI32(hex.substr(i*2, 2), 16) as u8;
+        res[i] = I32.parseInt(hex.substring(i*2, 2), 16) as u8;
     }
     return res;
 }
@@ -65,8 +65,8 @@ function hexToBytes(hex: string): Uint8Array {
 function concatUint8Array(arr1: Uint8Array, arr2: Uint8Array): Uint8Array {
     let len = arr1.byteLength + arr2.byteLength;
     let res = new Uint8Array(len);
-    memory.copy(res.buffer.data, arr1.buffer.data + arr1.byteOffset, arr1.byteLength);
-    memory.copy(res.buffer.data + arr1.length, arr2.buffer.data + arr2.byteOffset, arr2.byteLength);
+    memory.copy((res.buffer as usize) + res.byteOffset, (arr1.buffer as usize) + arr1.byteOffset, arr1.byteLength);
+    memory.copy((res.buffer as usize) + res.byteOffset + arr1.byteLength, (arr2.buffer as usize) + arr2.byteOffset, arr2.byteLength);
     return res;
 }
 
@@ -75,7 +75,8 @@ function concatUint8Arrays(arrays: Array<Uint8Array>): Uint8Array {
     let res = new Uint8Array(len);
     let counter = 0;
     for (let i = 0; i < arrays.length; i++) {
-        memory.copy(res.buffer.data + counter, arrays[i].buffer.data + arrays[1].byteOffset, arrays[i].byteLength);
+        // TODO: check that arrays[1].byteOffset is right and covered by tests
+        memory.copy((res.buffer as usize) + res.byteOffset + counter, (arrays[i].buffer as usize) + arrays[1].byteOffset, arrays[i].byteLength);
         counter += arrays[i].byteLength;
     }
     return res;
@@ -88,7 +89,7 @@ function concatUint8Arrays(arrays: Array<Uint8Array>): Uint8Array {
  * @returns returns rlp encoded byte array.
  **/
 export function encode(input: RLPData): Uint8Array {
-    if (input.children) {
+    if (input.children.length) {
         let output = new Array<Uint8Array>();
         for (let i = 0; i < input.children.length; i++) {
             output.push(encode(input.children[i]));

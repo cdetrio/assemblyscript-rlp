@@ -1,6 +1,9 @@
 import * as RLP from '../index';
 import {RLPData} from "../type";
 
+const nullUint8Arr = new Uint8Array(0);
+const nullRlpData = new Array<RLPData>();
+
 function arrayToUint8Array(array: u8[]): Uint8Array {
     let len = array.length;
     let res = new Uint8Array(len);
@@ -11,13 +14,13 @@ function arrayToUint8Array(array: u8[]): Uint8Array {
 }
 
 function bytesToString(bytes: Uint8Array): string {
-    return String.fromUTF8((bytes.buffer.data + bytes.byteOffset) as usize, bytes.byteLength);
+    return String.UTF8.decodeUnsafe((bytes.buffer as usize) + bytes.byteOffset, bytes.byteLength);
 }
 
 function stringToBytes(s: string): Uint8Array {
-    let len = s.lengthUTF8 - 1;
-    let bytes = new Uint8Array(len);
-    memory.copy(bytes.buffer.data, s.toUTF8(), len);
+    let len = String.UTF8.byteLength(s);
+    let str_bytes = String.UTF8.encode(s);
+    let bytes = Uint8Array.wrap(str_bytes, 0, len);
     return bytes;
 }
 
@@ -96,14 +99,14 @@ describe('RLP decoding:', function() {
     it('first byte < 0x7f, return byte itself', (): void => {
         let decoded = RLP.decode(arrayToUint8Array([97]));
         expect<usize>(decoded.buffer.length).toBe(1);
-        expect<RLPData[]>(decoded.children).toBeNull();
+        expect<RLPData[]>(decoded.children).toStrictEqual(nullRlpData);
         expect<string>(bytesToString(decoded.buffer)).toBe('a');
     });
 
     it('first byte < 0xb7, data is everything except first byte', (): void => {
         let decoded = RLP.decode(arrayToUint8Array([131, 100, 111, 103]));
         expect<usize>(decoded.buffer.length).toBe(3);
-        expect<RLPData[]>(decoded.children).toBeNull();
+        expect<RLPData[]>(decoded.children).toStrictEqual(nullRlpData);
         expect<string>(bytesToString(decoded.buffer)).toBe('dog');
     });
 
@@ -111,13 +114,13 @@ describe('RLP decoding:', function() {
         let testString = 'This function takes in a data, convert it to buffer if not, and a length for recursion';
         let encoded = RLP.encode(new RLPData(stringToBytes(testString), null));
         let decoded = RLP.decode(encoded);
-        expect<RLPData[]>(decoded.children).toBeNull();
+        expect<RLPData[]>(decoded.children).toStrictEqual(nullRlpData);
         expect<string>(bytesToString(decoded.buffer)).toBe(testString);
     });
 
     it('list of items', (): void => {
         let decodedBufferArray = RLP.decode(arrayToUint8Array([204, 131, 100, 111, 103, 131, 103, 111, 100, 131, 99, 97, 116]));
-        expect<Uint8Array>(decodedBufferArray.buffer).toBeNull();
+        expect<Uint8Array>(decodedBufferArray.buffer).toStrictEqual(nullUint8Arr);
         expect<usize>(decodedBufferArray.children.length).toBe(3);
         // as-pect does not support deep equal due to lack of metadata support from assemblyscript.
         expect<string>(bytesToString(decodedBufferArray.children[0].buffer)).toBe('dog');
@@ -127,11 +130,20 @@ describe('RLP decoding:', function() {
 
     it('list over 55 bytes long', (): void => {
         let testString: string[] = ['This', 'function', 'takes', 'in', 'a', 'data', 'convert', 'it', 'to', 'buffer', 'if', 'not', 'and', 'a', 'length', 'for', 'recursion', 'a1', 'a2', 'a3', 'ia4', 'a5', 'a6', 'a7', 'a8', 'ba9'];
-        let rlpData = new RLPData(null, testString.map<RLPData>(s => new RLPData(stringToBytes(s), null)));
+        // map<RLPData> doesn't work. could be this issue https://github.com/AssemblyScript/assemblyscript/issues/696
+        //let rlpData = new RLPData(null, testString.map<RLPData>(s => new RLPData(stringToBytes(s), null)));
+
+        let rlp_string_datas: RLPData[] = new Array<RLPData>();
+        for (let i=0; i<testString.length; i++) {
+            let elem_string = new RLPData(stringToBytes(testString[i]), nullRlpData);
+            rlp_string_datas.push(elem_string);
+        }
+        let rlpData = new RLPData(nullUint8Arr, rlp_string_datas);
+
         let encoded = RLP.encode(rlpData);
         expect<usize>(encoded.length).toBe(114);
         let decoded = RLP.decode(encoded);
-        expect<Uint8Array>(decoded.buffer).toBeNull();
+        expect<Uint8Array>(decoded.buffer).toStrictEqual(nullUint8Arr);
         expect<usize>(decoded.children.length).toBe(testString.length);
         for (let i = 0; i < testString.length; i++) {
             expect<string>(bytesToString(decoded.children[i].buffer)).toBe(testString[i]);
@@ -141,7 +153,7 @@ describe('RLP decoding:', function() {
 
 describe('null values', function() {
     it('encode a null array', function() {
-        let encoded = RLP.encode(new RLPData(new Uint8Array(0), null));
+        let encoded = RLP.encode(new RLPData(nullUint8Arr, null));
         expect<u8>(encoded[0]).toBe(0x80);
         expect<usize>(encoded.length).toBe(1);
     });
@@ -149,7 +161,7 @@ describe('null values', function() {
     it('should decode a null value', function() {
         let decoded = RLP.decode(arrayToUint8Array([0x80]));
         expect<usize>(decoded.buffer.length).toBe(0);
-        expect<RLPData[]>(decoded.children).toBeNull();
+        expect<RLPData[]>(decoded.children).toStrictEqual(nullRlpData);
     });
 });
 
@@ -165,6 +177,6 @@ describe('zero values', function() {
         let decoded = RLP.decode(arrayToUint8Array([0]));
         expect<u8>(decoded.buffer[0]).toBe(0);
         expect<usize>(decoded.buffer.length).toBe(1);
-        expect<RLPData[]>(decoded.children).toBeNull();
+        expect<RLPData[]>(decoded.children).toStrictEqual(nullRlpData);
     })
 });

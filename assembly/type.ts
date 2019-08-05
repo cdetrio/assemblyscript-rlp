@@ -6,8 +6,17 @@ export class RLPData {
     buffer: Uint8Array;
     children: RLPData[];
 
-    constructor(input: Uint8Array, children: RLPData[]) {
-        this.buffer = input;
-        this.children = children;
+    constructor(input: Uint8Array | null, children: RLPData[] | null) {
+        if (input) {
+            this.buffer = input;
+        } else {
+            this.buffer = new Uint8Array(0);
+        }
+
+        if (children) {
+            this.children = children;
+        } else {
+            this.children = new Array<RLPData>();
+        }
     }
 }
